@@ -63,7 +63,7 @@ func extraerClaveAñoYPaginas(urlLibro string, tipo string) (claveLibro string, 
 	if err != nil {
 		return
 	}
-	expresionRegularPaginas := regexp.MustCompile(`(?m)ag_pages = (\d*);`)
+	expresionRegularPaginas := regexp.MustCompile(`(?m)ag_pages = (\d+);`)
 	coincidenciasPagina := expresionRegularPaginas.FindStringSubmatch(codigoFuente)
 	if len(coincidenciasPagina) < 2 {
 		err = fmt.Errorf("no se pudo extraer la cantidad de páginas. Coincidencias: %v", coincidenciasPagina)
