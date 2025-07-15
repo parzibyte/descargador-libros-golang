@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +19,11 @@ const TIPO_HISTORICO = "historico"
 const TIPO_NORMAL = "normal"
 const ORIENTACION_VERTICAL = "v"
 const ORIENTACION_HORIZONTAL = "h"
+
+type Libro struct {
+	Paginas int    `json:"ag_pages"`
+	Clave   string `json:"ag_clave"`
+}
 
 var expresionRegularLibroActual = regexp.MustCompile(`(?m)https://libros\.conaliteg\.gob\.mx/(\d+)/\w+\.html?`)
 var expresionRegularLibroHistorico = regexp.MustCompile(`(?m)https://historico\.conaliteg\.gob\.mx/([a-zA-Z0-9]+)\.html?`)
@@ -58,7 +65,25 @@ func extraerAñoDeLibroSegunUrl(urlLibro string) (string, error) {
 	return coincidenciasPagina[1], nil
 }
 
+func extraerClaveDeUrlDeHistorico(urlLibro string) (string, error) {
+	expresionRegularClave := regexp.MustCompile(`https://historico\.conaliteg\.gob\.mx/(\w+)\.htm(#page/2)?`)
+	coincidencias := expresionRegularClave.FindStringSubmatch(urlLibro)
+	if len(coincidencias) < 2 {
+		return "", fmt.Errorf("Imposible extraer clave de libro histórico en la URL %s. Cantidad de coincidencias: %d", urlLibro, len(coincidencias))
+	}
+	return coincidencias[1], nil
+}
+
 func extraerClaveAñoYPaginas(urlLibro string, tipo string) (claveLibro string, año string, cantidadDePaginas int, err error) {
+	if tipo == TIPO_HISTORICO {
+		claveLibro, err = extraerClaveDeUrlDeHistorico(urlLibro)
+		if err != nil {
+			return
+		}
+		año = "0"
+		cantidadDePaginas, err = obtenerCantidadDePaginasDeHistorico(claveLibro)
+		return
+	}
 	codigoFuente, err := obtenerCodigoFuenteDeVisualizadorDeLibro(urlLibro)
 	if err != nil {
 		return
@@ -84,6 +109,7 @@ func extraerClaveAñoYPaginas(urlLibro string, tipo string) (claveLibro string, 
 	if tipo == TIPO_NORMAL {
 		año, err = extraerAñoDeLibroSegunUrl(urlLibro)
 	}
+	cantidadDePaginas -= 2
 	return
 }
 
@@ -208,4 +234,30 @@ Escribe o pega la URL del libro SIN ESPACIOS y presiona ENTER: `)
 	}
 	fmt.Printf("Puedes volver a ejecutar este programa cuando quieras descargar otro libro. Presiona ENTER para salir")
 	fmt.Scanln(&orientacion)
+}
+
+func obtenerCantidadDePaginasDeHistorico(clave string) (int, error) {
+	const urlClaves = "https://historico.conaliteg.gob.mx/claves.json"
+	respuesta, err := http.Get(urlClaves)
+	if err != nil {
+		return 0, err
+	}
+	if respuesta.StatusCode != http.StatusOK {
+		return 0, errors.New("Error consultando claves JSON")
+	}
+	defer respuesta.Body.Close()
+	cuerpoRespuesta, err := io.ReadAll(respuesta.Body)
+	if err != nil {
+		return 0, err
+	}
+	var salidaJson map[string]Libro
+	err = json.Unmarshal(cuerpoRespuesta, &salidaJson)
+	if err != nil {
+		return 0, nil
+	}
+	posibleLibro, ok := salidaJson[clave]
+	if !ok {
+		return 0, fmt.Errorf("Claves obtenidas pero no existe la clave %s en el mapa", clave)
+	}
+	return posibleLibro.Paginas, nil
 }
