@@ -21,7 +21,7 @@ prod:
 	# Formateando
 	${GOFMT} -w .
 	# Compilando
-	${GO} build -o ${OUTPUT_FILE}_prod_64.exe -tags produccion -ldflags "-H windowsgui"
+	${GO} build -o ${OUTPUT_FILE}_prod_64.exe -tags produccion
 
 prod_32:
 	# Si vas a compilar para 32 bits, probablemente quieras:
@@ -31,4 +31,4 @@ prod_32:
 	# Formateando
 	${GOFMT} -w .
 	# Compilando
-	${GO} build -o ${OUTPUT_FILE}_prod_32.exe -tags produccion -ldflags "-H windowsgui"
+	${GO} build -o ${OUTPUT_FILE}_prod_32.exe -tags produccion 
