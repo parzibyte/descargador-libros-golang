@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 
@@ -124,10 +126,10 @@ func descargarImagenDeInternetYDevolverReader(url string) (io.Reader, error) {
 	return respuesta.Body, nil
 }
 
-func descargarLibro(urlLibro string, tipo string, orientacion string) error {
+func descargarLibro(urlLibro string, tipo string, orientacion string) (string, error) {
 	claveLibro, año, cantidadPaginas, err := extraerClaveAñoYPaginas(urlLibro, tipo)
 	if err != nil {
-		return err
+		return "", err
 	}
 	fmt.Printf(`Información del libro %s extraída.
 Clave: %s
@@ -177,29 +179,32 @@ Cantidad de páginas: %d
 		lectorRespuestaHttp, err := descargarImagenDeInternetYDevolverReader(url)
 		fmt.Printf("OK\nAgregando imagen descargada a PDF...")
 		if err != nil {
-			return fmt.Errorf("al descargar imagen: %s", err.Error())
+			return "", fmt.Errorf("al descargar imagen: %s", err.Error())
 		}
 		pdf.AddPage()
 		imageHolder, err := gopdf.ImageHolderByReader(lectorRespuestaHttp)
 		if err != nil {
-			return err
+			return "", err
 		}
 		err = pdf.ImageByHolder(imageHolder, 0, 0, &gopdf.Rect{
 			W: tamañoDePagina.W,
 			H: tamañoDePagina.H,
 		})
 		if err != nil {
-			return fmt.Errorf("al agregar la imagen al PDF: %s", err.Error())
+			return "", fmt.Errorf("al agregar la imagen al PDF: %s", err.Error())
 		}
 
 		fmt.Printf("OK\n")
 	}
 	nombrePdf := claveLibro + ".pdf"
 	fmt.Printf("Guardando PDF con el nombre %s...", nombrePdf)
-	return pdf.WritePdf(nombrePdf)
+	return nombrePdf, pdf.WritePdf(nombrePdf)
 }
 
 func main() {
+	var variableParaAceptarResponsabilidad string
+	fmt.Println(`Descargador de libros creado por Parzibyte. Al usar esta herramienta, lo haces bajo tu propia responsabilidad. El autor no se hace responsable por el mal uso que le puedas dar. Presiona ENTER para continuar bajo tu responsabilidad, o cierra el programa si no estás de acuerdo.`)
+	fmt.Scanln(&variableParaAceptarResponsabilidad)
 	fmt.Printf(`
 Parzibyte's blog
 https://parzibyte.me/blog
@@ -211,7 +216,11 @@ Ingresa la URL del libro. Puede tener una de las siguientes formas:
 1: https://historico.conaliteg.gob.mx/CLAVE.htm
 2: https://libros.conaliteg.gob.mx/AÑO/CLAVE.htm
 
-Escribe o pega la URL del libro SIN ESPACIOS y presiona ENTER: `)
+No incluyas "page" ni "#". Un enlace INCORRECTO es, por ejemplo:
+https://libros.conaliteg.gob.mx/2024/P1MLA.htm#page/255. Ese mismo enlace pero CORRECTO es:
+https://libros.conaliteg.gob.mx/2024/P1MLA.htm
+Escribe o pega la URL del libro SIN ESPACIOS a continuación, y presiona ENTER:`)
+	fmt.Printf("")
 	var urlLibro string
 	var orientacion string = "v"
 	fmt.Scanln(&urlLibro)
@@ -225,14 +234,23 @@ Escribe o pega la URL del libro SIN ESPACIOS y presiona ENTER: `)
 		fmt.Printf("Error: la orientación debe ser v o h, pero escribiste '%s'", orientacion)
 		return
 	}
-	err = descargarLibro(urlLibro, tipo, orientacion)
+	nombrePdfDescargado, err := descargarLibro(urlLibro, tipo, orientacion)
 	if err != nil {
-		fmt.Printf("Error descargando libro. El error es: %v",
-			err)
+		fmt.Printf("Error descargando libro de URL %s. El error es: %v",
+			urlLibro, err)
 	} else {
-		fmt.Printf("\n\nLibro descargado correctamente en el mismo lugar donde se encuentra este programa\n")
+		ruta, _ := obtenerRutaDeEjecutable()
+		fmt.Printf("\n\nLibro descargado correctamente en el mismo lugar donde se encuentra este programa (%s\\%s)\n", ruta, nombrePdfDescargado)
 	}
-	fmt.Printf("Puedes volver a ejecutar este programa cuando quieras descargar otro libro. Presiona ENTER para salir")
+	fmt.Printf(`Puedes volver a ejecutar este programa cuando quieras descargar otro libro.
+No olvides seguir al autor para estar al tanto de cualquier actualización:
+
+https://facebook.com/parzibyte.fanpage
+https://parzibyte.me/blog
+https://x.com/parzibyte
+https://t.me/parzibyte_channel
+
+Presiona ENTER para salir`)
 	fmt.Scanln(&orientacion)
 }
 
@@ -260,4 +278,12 @@ func obtenerCantidadDePaginasDeHistorico(clave string) (int, error) {
 		return 0, fmt.Errorf("Claves obtenidas pero no existe la clave %s en el mapa", clave)
 	}
 	return posibleLibro.Paginas, nil
+}
+
+func obtenerRutaDeEjecutable() (string, error) {
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(execPath), nil
 }
